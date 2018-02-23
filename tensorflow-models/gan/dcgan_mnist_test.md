@@ -1,1 +1,0 @@
-![alt text](https://github.com/zhedongzheng/finch/blob/master/assets/dcgan_mnist_test.png)

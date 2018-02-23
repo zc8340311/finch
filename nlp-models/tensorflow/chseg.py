@@ -1,13 +1,12 @@
 import re
 import sys
-import jieba
 
 
 def load_data():
     # B: 0, M: 1, E: 2, S: 3
-    char2idx = {}
-    idx2char = {}
-    char_idx = 0
+    char2idx = {'<pad>':0}
+    idx2char = {0:'<pad>'}
+    char_idx = 1
     x_train = []
     y_train = []
     x_test = []
@@ -31,10 +30,7 @@ def load_data():
             else:
                 ys.append(1)
     
-    if py == 3:
-        text = preprocess('temp/icwb2-data/training/pku_training.txt')
-    else:
-        text = preprocess('temp/icwb2-data/training/pku_training.utf8')
+    text = preprocess('temp/icwb2-data/training/pku_training.utf8')
     cutoff = int(0.8 * len(text))
     segs_train = text[:cutoff].split()
     segs_test = text[cutoff:].split()
@@ -51,7 +47,7 @@ def load_data():
             # handle y
             build_y(chars, y_train)
 
-    char2idx['<UNK>'] = char_idx
+    char2idx['<unknown>'] = char_idx
 
     for seg in segs_test:
         chars = list(seg) if py == 3 else list(seg.decode('utf-8', 'ignore'))

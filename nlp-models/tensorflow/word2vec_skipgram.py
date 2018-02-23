@@ -10,7 +10,7 @@ from sklearn.utils import shuffle
 
 class SkipGram:
     def __init__(self, text, sample_words, skip_window=5, embedding_dim=200, n_sampled=100, min_freq=5,
-                 useless_words=None, loss_fn=tf.nn.nce_loss, sess=tf.Session()):
+                 useless_words=None, loss_fn=tf.nn.sampled_softmax_loss, sess=tf.Session()):
         self.text = text
         self.sample_words = sample_words
         self.skip_window = skip_window
@@ -37,22 +37,25 @@ class SkipGram:
         self.x = tf.placeholder(tf.int32, shape=[None])
         self.y = tf.placeholder(tf.int32, shape=[None, 1])
         self.w = tf.get_variable('softmax_w', [self.vocab_size, self.embedding_dim], tf.float32,
-                                  tf.glorot_uniform_initializer())
-        self.b = tf.get_variable('softmax_b', [self.vocab_size], tf.float32, tf.constant_initializer(0.01))
+                                  tf.variance_scaling_initializer())
+        self.b = tf.get_variable('softmax_b', [self.vocab_size], tf.float32)
     # end method add_input_layer
 
 
     def add_word_embedding(self):
-        self.embedding = tf.get_variable('word_embedding', [self.vocab_size, self.embedding_dim], tf.float32,
-                                          tf.random_uniform_initializer(-1.0, 1.0))
+        self.embedding = tf.get_variable('embedding', [self.vocab_size, self.embedding_dim], tf.float32)
         self.embedded = tf.nn.embedding_lookup(self.embedding, self.x) # forward activation of the input network
     # end method add_word_embedding
 
 
     def add_backward_path(self):
-        self.loss = tf.reduce_mean(self.loss_fn(weights=self.w, biases=self.b,
-                                                labels=self.y, inputs=self.embedded,
-                                                num_sampled=self.n_sampled, num_classes=self.vocab_size))
+        self.loss = tf.reduce_mean(self.loss_fn(
+            weights=self.w,
+            biases=self.b,
+            labels=self.y,
+            inputs=self.embedded,
+            num_sampled=self.n_sampled,
+            num_classes=self.vocab_size))
         self.train_op = tf.train.AdamOptimizer().minimize(self.loss)
     # end method add_backward_path
 
@@ -61,8 +64,12 @@ class SkipGram:
         self.sample_indices = [self.word2idx[w] for w in self.sample_words]
         sample_indices = tf.constant(self.sample_indices, dtype=tf.int32)
 
+        # divided by modulus for cosine similarity
+        """
         norm = tf.sqrt(tf.reduce_sum(tf.square(self.embedding), 1, keep_dims=True))
-        normalized_embedding = self.embedding / norm # divided by modulus for cosine similarity
+        normalized_embedding = self.embedding / norm
+        """
+        normalized_embedding = tf.nn.l2_normalize(self.embedding, -1)
 
         sample_embedded = tf.nn.embedding_lookup(normalized_embedding, sample_indices)
         self.similarity = tf.matmul(sample_embedded, normalized_embedding, transpose_b=True)
@@ -71,13 +78,10 @@ class SkipGram:
 
     def preprocess_text(self):
         text = self.text
-        if self.useless_words is not None:
-            if int(sys.version[0]) >= 3:
-                table = str.maketrans({useless: '' for useless in self.useless_words})
-                text = text.translate(table)
-            else:
-                text = re.sub(r'[{}]'.format(''.join(self.useless_words)), ' ', text)
-        text = re.sub('\s+', ' ', text.replace('\n', ' ')).strip().lower()
+        for useless in self.useless_words:
+            text = text.replace(useless, ' ')
+        text = text.replace('\n', ' ')
+        text = re.sub('\s+', ' ', text).strip().lower()
         
         words = text.split()
         word2freq = Counter(words)

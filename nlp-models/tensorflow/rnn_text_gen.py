@@ -4,8 +4,8 @@ import math
 
 
 class RNNTextGen:
-    def __init__(self, text, seq_len=50, embedding_dims=128, cell_size=256, n_layer=2, grad_clip=5., 
-                 sess=tf.Session()):
+    def __init__(self, text, seq_len, embedding_dims=128, cell_size=128, n_layer=2,
+                 grad_clip=5.0, sess=tf.Session()):
         """
         Parameters:
         -----------
@@ -50,17 +50,18 @@ class RNNTextGen:
     def add_input_layer(self):
         self.X = tf.placeholder(tf.int32, [None, None])
         self.Y = tf.placeholder(tf.int32, [None, None])
-        self.batch_size = tf.shape(self.X)[0]
-        self.lr = tf.placeholder(tf.float32) 
+        self.lr = tf.placeholder(tf.float32)
+        self.is_training = tf.placeholder(tf.bool)
+        self.batch_size = tf.shape(self.X)[0] 
         self._pointer = self.X
     # end method add_input_layer
 
 
     def add_word_embedding(self):
-        # (batch_size, seq_len) -> (batch_size, seq_len, embedding_dims)
-        embedding = tf.get_variable('encoder', [self.vocab_size, self.embedding_dims], tf.float32,
-                                     tf.random_uniform_initializer(-1.0, 1.0))
-        self._pointer = tf.nn.embedding_lookup(embedding, self._pointer)
+        embedding = tf.get_variable(
+            'lookup_table', [self.vocab_size, self.embedding_dims], tf.float32)
+        embeded = tf.nn.embedding_lookup(embedding, self._pointer)
+        self._pointer = tf.layers.dropout(embeded, 0.2, training=self.is_training)
     # end method add_word_embedding
 
 
@@ -127,7 +128,7 @@ class RNNTextGen:
     # end method next_batch
 
 
-    def fit(self, start_word, text_iter_step=1, n_gen=500, n_epoch=1, batch_size=128, en_exp_decay=False):
+    def fit(self, start_word, n_gen, text_iter_step=25, n_epoch=1, batch_size=128, en_exp_decay=False):
         global_step = 0
         n_batch = (len(self.indexed) - self.seq_len*batch_size - 1) // text_iter_step
         total_steps = n_epoch * n_batch
@@ -141,12 +142,15 @@ class RNNTextGen:
                                                           {self.X: X_batch,
                                                            self.Y: Y_batch,
                                                            self.init_state: next_state,
-                                                           self.lr: lr})
+                                                           self.lr: lr,
+                                                           self.is_training: True})
                 if local_step % 10 == 0:
                     print ('Epoch %d/%d | Batch %d/%d | train loss: %.4f | lr: %.4f'
                             % (epoch+1, n_epoch, local_step, n_batch, train_loss, lr))
                 if local_step % 100 == 0:
-                    print(self.infer(start_word, n_gen)+'\n')
+                    print()
+                    print(self.infer(start_word, n_gen))
+                    print()
                 global_step += 1
     # end method fit
 
@@ -156,20 +160,25 @@ class RNNTextGen:
         next_state = self.sess.run(self.init_state, {self.batch_size: 1})
         char_list = list(start_word)
         for char in char_list[:-1]:
-            next_state = self.sess.run(self.final_state, {self.X: np.atleast_2d(self.char2idx[char]),
-                                                          self.init_state: next_state})
-        # end warming up
+            next_state = self.sess.run(self.final_state,
+                {self.X: np.atleast_2d(self.char2idx[char]),
+                 self.init_state: next_state,
+                 self.is_training: False})
 
-        out_sentence = 'IN:\n' + start_word + '\n\nOUT:\n' + start_word
+        out_sentence = start_word
         char = char_list[-1]
         for _ in range(n_gen):
             softmax_out, next_state = self.sess.run([self.softmax_out, self.final_state],
-                                                    {self.X: np.atleast_2d(self.char2idx[char]),
-                                                     self.init_state: next_state})
+                {self.X: np.atleast_2d(self.char2idx[char]),
+                 self.init_state: next_state,
+                 self.is_training: False})
+            """
             probas = softmax_out[0].astype(np.float64)
             probas = probas / np.sum(probas)
             actions = np.random.multinomial(1, probas, 1)
             char = self.idx2char[np.argmax(actions)]
+            """
+            char = self.idx2char[np.argmax(softmax_out[0])]
             out_sentence = out_sentence + char
         return out_sentence
     # end method infer

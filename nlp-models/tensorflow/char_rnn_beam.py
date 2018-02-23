@@ -1,11 +1,10 @@
 import tensorflow as tf
 import numpy as np
-from tensorflow.python.layers import core as core_layers
 
 
 class RNNTextGen:
-    def __init__(self, text, seq_len=50, embedding_dims=30, rnn_size=256, n_layers=2, grad_clip=5.,
-                 beam_width=5, sess=tf.Session()):
+    def __init__(self, text, seq_len, embedding_dims=30, rnn_size=256, n_layers=2, grad_clip=5.,
+                 beam_width=3, sess=tf.Session()):
         self.sess = sess
         self.text = text
         self.seq_len = seq_len
@@ -42,17 +41,14 @@ class RNNTextGen:
 
             helper = tf.contrib.seq2seq.TrainingHelper(
                 inputs = tf.nn.embedding_lookup(decoder_embedding, self._decoder_input()),
-                sequence_length = self.sequence_length+1,
-                time_major = False)
+                sequence_length = self.sequence_length+1)
             decoder = tf.contrib.seq2seq.BasicDecoder(
                 cell = decoder_cell,
                 helper = helper,
                 initial_state = decoder_cell.zero_state(self._batch_size, tf.float32),
-                output_layer = core_layers.Dense(self.vocab_size))
+                output_layer = tf.layers.Dense(self.vocab_size))
             decoder_output, _, _ = tf.contrib.seq2seq.dynamic_decode(
-                decoder = decoder,
-                impute_finished = True,
-                maximum_iterations = tf.reduce_max(self.sequence_length+1))
+                decoder = decoder)
             self.logits = decoder_output.rnn_output
         
         with tf.variable_scope('decode', reuse=True):
@@ -66,11 +62,9 @@ class RNNTextGen:
                 initial_state = tf.contrib.seq2seq.tile_batch(
                     decoder_cell.zero_state(self._batch_size,tf.float32), self.beam_width),
                 beam_width = self.beam_width,
-                output_layer = core_layers.Dense(self.vocab_size, _reuse=True),
-                length_penalty_weight = 0.0)
+                output_layer = tf.layers.Dense(self.vocab_size, _reuse=True))
             decoder_output, _, _ = tf.contrib.seq2seq.dynamic_decode(
                 decoder = decoder,
-                impute_finished = False,
                 maximum_iterations = self.gen_seq_length)
             self.predicted_ids = decoder_output.predicted_ids[:, :, 0]
     # end method
@@ -78,10 +72,10 @@ class RNNTextGen:
 
     def add_backward_path(self):
         targets = self._decoder_output()
-        self.loss = tf.reduce_sum(tf.contrib.seq2seq.sequence_loss(
+        self.loss = tf.reduce_mean(tf.contrib.seq2seq.sequence_loss(
             logits = self.logits,
             targets = targets,
-            weights = tf.cast(tf.ones_like(targets), tf.float32),
+            weights = tf.to_float(tf.ones_like(targets)),
             average_across_timesteps = True,
             average_across_batch = True))
         # gradient clipping
@@ -133,7 +127,7 @@ class RNNTextGen:
     def decode(self):
         predicted_ids = self.sess.run(self.predicted_ids,
                                      {self._batch_size: 1,
-                                      self.gen_seq_length: self.seq_len * 2})[0]
+                                      self.gen_seq_length: self.seq_len})[0]
         print('D: '+''.join([self.idx2char[idx] for idx in predicted_ids]), end='\n\n')
     # end method
 

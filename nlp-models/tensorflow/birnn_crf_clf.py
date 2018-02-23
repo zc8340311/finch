@@ -83,20 +83,22 @@ class BiRNN_CRF:
 
 
     def add_crf_layer(self):
-        with tf.variable_scope('crf'):
+        logits = tf.reshape(self.logits, [tf.shape(self.X)[0], -1, self.n_out])
+        with tf.variable_scope('crf_loss'):
             self.log_likelihood, _ = tf.contrib.crf.crf_log_likelihood(
-                inputs = tf.reshape(self.logits, [tf.shape(self.X)[0], -1, self.n_out]),
+                inputs = logits,
                 tag_indices = self.Y,
                 sequence_lengths = self.X_seq_len)
-        with tf.variable_scope('crf', reuse=True):
-            self.transition_params = tf.get_variable('transitions', [self.n_out, self.n_out])
+        with tf.variable_scope('crf_loss', reuse=True):
+            transition_params = tf.get_variable('transitions', [self.n_out, self.n_out])
+        self.viterbi_sequence, _ = tf.contrib.crf.crf_decode(
+            logits, transition_params, self.X_seq_len)
     # end method add_crf_layer
 
 
     def add_backward_path(self):
         self.loss = tf.reduce_mean(-self.log_likelihood)
-        self.acc = tf.reduce_mean(tf.cast(tf.equal(
-            tf.argmax(self.logits, 1), tf.reshape(tf.cast(self.Y, tf.int64), [-1])), tf.float32))
+        self.acc = tf.reduce_mean(tf.cast(tf.equal(self.viterbi_sequence, self.Y), tf.float32))
         self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
     # end method add_backward_path
 
@@ -128,23 +130,21 @@ class BiRNN_CRF:
     def predict(self, X_test, batch_size=128):
         batch_pred_list = []
         for X_test_batch in self.gen_batch(X_test, batch_size):
-            batch_pred = self.sess.run(self.logits,
+            batch_pred = self.sess.run(self.viterbi_sequence,
                                       {self.X: X_test_batch,
                                        self.X_seq_len: len(X_test_batch)*[X_test.shape[1]],
                                        self.keep_prob: 1.0})
             batch_pred_list.append(batch_pred)
-        return np.argmax(np.vstack(batch_pred_list), 1)
+        return np.vstack(batch_pred_list)
     # end method predict
 
 
     def infer(self, xs):
-        logits, transition_params = self.sess.run([self.logits, self.transition_params],
-                                                  {self.X: np.atleast_2d(xs),
-                                                   self.X_seq_len: np.atleast_1d(len(xs)),
-                                                   self.keep_prob: 1.0})
-        score = logits.reshape([len(xs), self.n_out])
-        viterbi_seq, viterbi_score = tf.contrib.crf.viterbi_decode(score, transition_params)
-        return viterbi_seq
+        viterbi_seq = self.sess.run(self.viterbi_sequence,
+                                   {self.X: np.atleast_2d(xs),
+                                    self.X_seq_len: np.atleast_1d(len(xs)),
+                                    self.keep_prob: 1.0})
+        return np.squeeze(viterbi_seq,0)
     # end method infer
 
 

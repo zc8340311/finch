@@ -7,7 +7,7 @@ import math
 
 class RNNTextClassifier:
     def __init__(self, vocab_size, n_out, embedding_dims=128, cell_size=128, grad_clip=5.0,
-                 sess=tf.Session()):
+                 attn_size=50, sess=tf.Session()):
         """
         Parameters:
         -----------
@@ -24,6 +24,7 @@ class RNNTextClassifier:
         self.embedding_dims = embedding_dims
         self.cell_size = cell_size
         self.grad_clip = grad_clip
+        self.attn_size = attn_size
         self.n_out = n_out
         self.sess = sess
         self._pointer = None
@@ -72,15 +73,16 @@ class RNNTextClassifier:
 
 
     def add_attention(self):
-        """
-        The final state (context vector) gains access to the hidden states of all time steps
-        """
-        encoder_state = tf.expand_dims(self.final_state.h, 2)
-        # (batch, seq_len, cell_size) * (batch, cell_size, 1) = (batch, seq_len, 1)
-        weights = tf.matmul(self._pointer, encoder_state)
-        weights = self.softmax(tf.squeeze(weights, 2))
+        v = tf.get_variable("attention_v", [self.attn_size], tf.float32)
+        # (B, 1, D)
+        query = tf.layers.dense(tf.expand_dims(self.final_state.h, 1), self.attn_size)
+        # (B, T, D)
+        keys = tf.layers.dense(self._pointer, self.attn_size)                           
+        align = tf.reduce_sum(v * tf.tanh(keys + query), [2])
+        align = self.softmax(align)
         # (batch, cell_size, seq_len) * (batch, seq_len, 1) = (batch, cell_size, 1)
-        self._pointer = tf.squeeze(tf.matmul(tf.transpose(self._pointer, [0, 2, 1]), tf.expand_dims(weights, 2)), 2)
+        self._pointer = tf.squeeze(tf.matmul(tf.transpose(self._pointer, [0, 2, 1]),
+                                             tf.expand_dims(align, 2)), 2)
     # end method add_attention
 
 
@@ -101,8 +103,7 @@ class RNNTextClassifier:
     # end method add_backward_path
 
 
-    def fit(self, X, Y, val_data=None, n_epoch=10, batch_size=128, en_exp_decay=True, en_shuffle=True, 
-            keep_prob=1.0):
+    def fit(self, X, Y, val_data=None, n_epoch=10, batch_size=128, en_exp_decay=True, keep_prob=1.0):
         if val_data is None:
             print("Train %d samples" % len(X) )
         else:
@@ -112,10 +113,6 @@ class RNNTextClassifier:
 
         self.sess.run(tf.global_variables_initializer()) # initialize all variables
         for epoch in range(n_epoch): # batch training
-            if en_shuffle:
-                print("Data Shuffled")
-                X, Y = sklearn.utils.shuffle(X, Y)
-
             for local_step, ((X_batch, X_batch_lens), Y_batch) in enumerate(zip(self.next_batch(X, batch_size),
                                                                                 self.gen_batch(Y, batch_size))):
                 lr = self.decrease_lr(en_exp_decay, global_step, n_epoch, len(X), batch_size)           

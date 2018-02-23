@@ -20,7 +20,7 @@ class ConvRNNTextGen:
         self.preprocessing()
         self.build_graph()
         self.saver = tf.train.Saver()
-        self.model_path = './saved/'+sys.argv[0][:-3]
+        self.model_path = './saved/cnn_rnn_text_gen.ckpt'
     # end constructor
 
 
@@ -98,13 +98,15 @@ class ConvRNNTextGen:
 
     def add_dynamic_rnn(self):
         self.init_state = self.cells.zero_state(self.batch_size, tf.float32)
-        self._pointer, self.final_state = tf.nn.dynamic_rnn(self.cells, self._pointer, initial_state=self.init_state)   
+        self._pointer, self.final_state = tf.nn.dynamic_rnn(
+            self.cells, self._pointer, initial_state=self.init_state)   
     # end method
 
 
     def add_output_layer(self):
-        reshaped = tf.reshape(self._pointer, [-1, self.cell_size])
-        self.logits = tf.layers.dense(reshaped, self.vocab_word, name='output')
+        self.rnn_out_2d = tf.reshape(self._pointer, [-1, self.cell_size])
+        with tf.variable_scope('logits'):
+            self.logits = tf.layers.dense(self.rnn_out_2d, self.vocab_word)
         self.softmax_out = tf.nn.softmax(self.logits)
     # end method
 
@@ -116,6 +118,17 @@ class ConvRNNTextGen:
             weights = tf.ones([self.batch_size, self.seq_len]),
             average_across_timesteps = True,
             average_across_batch = True)
+        """
+        with tf.variable_scope('logits/dense', reuse=True):
+            self.loss = tf.reduce_mean(tf.nn.sampled_softmax_loss(
+                weights = tf.transpose(tf.get_variable('kernel')),
+                biases = tf.get_variable('bias'),
+                labels = tf.reshape(self.Y, [-1, 1]),
+                inputs = self.rnn_out_2d,
+                num_sampled = 1000,
+                num_classes = self.vocab_word,
+            ))
+        """
         # gradient clipping
         params = tf.trainable_variables()
         gradients = tf.gradients(self.loss, params)

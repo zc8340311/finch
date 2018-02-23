@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+from tensorflow.python.layers.core import Dense
 
 
 class Seq2Seq:
@@ -101,7 +102,7 @@ class Seq2Seq:
             cell = self.decoder_cell,
             helper = training_helper,
             initial_state = self.decoder_cell.zero_state(self.batch_size, tf.float32).clone(cell_state=self.encoder_state),
-            output_layer = tf.layers.Dense(len(self.Y_word2idx)))
+            output_layer = Dense(len(self.Y_word2idx)))
         training_decoder_output, _, _ = tf.contrib.seq2seq.dynamic_decode(
             decoder = training_decoder,
             impute_finished = True,
@@ -137,7 +138,7 @@ class Seq2Seq:
             initial_state = self.decoder_cell.zero_state(self.batch_size * self.beam_width, tf.float32).clone(
                             cell_state = self.encoder_state_tiled),
             beam_width = self.beam_width,
-            output_layer = tf.layers.Dense(len(self.Y_word2idx), _reuse=True),
+            output_layer = Dense(len(self.Y_word2idx), _reuse=True),
             length_penalty_weight = 0.0)
         predicting_decoder_output, _, _ = tf.contrib.seq2seq.dynamic_decode(
             decoder = predicting_decoder,
@@ -184,7 +185,8 @@ class Seq2Seq:
     # end method
 
 
-    def fit(self, X_train, Y_train, val_data, n_epoch=60, display_step=50, batch_size=128):
+    def fit(self, X_train, Y_train, val_data, n_epoch=60, display_step=50, batch_size=128,
+            sentences=None):
         X_test, Y_test = val_data
         X_test_batch, Y_test_batch, X_test_batch_lens, Y_test_batch_lens = next(
         self.next_batch(X_test, Y_test, batch_size))
@@ -204,22 +206,34 @@ class Seq2Seq:
                                                          self.Y_seq_len: Y_test_batch_lens})
                     print("Epoch %d/%d | Batch %d/%d | train_loss: %.3f | test_loss: %.3f"
                         % (epoch, n_epoch, local_step, len(X_train)//batch_size, loss, val_loss))
+                    if sentences is not None:
+                        self.infer(sentences)
     # end method
 
 
-    def infer(self, input_word, X_idx2word, Y_idx2word, batch_size=128):
-        Y_idx2word[-1] = '-1'     
-        input_indices = [self.X_word2idx.get(char, self._x_unk) for char in input_word]
+    def infer(self, sentences):
+        X_idx2word = {i: c for c, i in self.X_word2idx.items()}
+        Y_idx2word = {i: c for c, i in self.Y_word2idx.items()}
+
+        Y_idx2word[-1] = '-1'
+        maxlen = max([len(st) for st in sentences])
+
+        input_indices = []
+        for st in sentences:
+            if len(st) < maxlen:
+                input_indices.append(
+                    [self.X_word2idx.get(char, self._x_unk) for char in st] + \
+                        [self.X_word2idx['<PAD>']] * (maxlen - len(st)))
+            else:
+                input_indices.append([self.X_word2idx.get(char, self._x_unk) for char in st])
+        
         out_indices = self.sess.run(self.predicting_ids, {
-            self.X: [input_indices], self.X_seq_len: [len(input_indices)]})[0]
+            self.X: np.atleast_2d(input_indices),
+            self.X_seq_len: [len(st) for st in sentences]})
         
-        print('\nSource')
-        print('Word: {}'.format([i for i in input_indices]))
-        print('IN: {}'.format(' '.join([X_idx2word[i] for i in input_indices])))
-        
-        print('\nTarget')
-        print('Word: {}'.format([i for i in out_indices]))
-        print('OUT: {}'.format(' '.join([Y_idx2word[i] for i in out_indices])))
+        for st, out_idx in zip(sentences, out_indices):
+            print('IN: {}'.format(st))
+            print('OUT: {}'.format(''.join([Y_idx2word[c] for c in out_idx])))
     # end method
 
 

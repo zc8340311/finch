@@ -87,11 +87,12 @@ class ConvLSTMClassifier:
     # end method add_conv1d
 
 
-    def add_pooling(self, k=2):
-        Y = tf.layers.average_pooling1d(inputs = self._pointer,
-                                        pool_size = k,
-                                        strides = k,
-                                        padding = self.padding)
+    def add_pooling(self, k):
+        self._pointer = tf.layers.max_pooling1d(
+            inputs = self._pointer,
+            pool_size = k,
+            strides = k,
+            padding = self.padding)
     # end method add_maxpool
 
 
@@ -103,7 +104,7 @@ class ConvLSTMClassifier:
     def add_dynamic_rnn(self):      
         _, self._pointer = tf.nn.dynamic_rnn(self.cell, self._pointer,
                                             dtype = tf.float32,
-                                            sequence_length = tf.divide(self.X_seq_lens, self.pool_size),
+                                            sequence_length = (self.X_seq_lens // self.pool_size),
                                             time_major = False)
     # end method add_dynamic_rnn
 
@@ -120,8 +121,7 @@ class ConvLSTMClassifier:
     # end method add_backward_path
 
 
-    def fit(self, X, Y, val_data=None, n_epoch=10, batch_size=128, keep_prob=1.0, en_exp_decay=True,
-            en_shuffle=True):
+    def fit(self, X, Y, val_data=None, n_epoch=10, batch_size=128, keep_prob=1.0, en_exp_decay=True):
         if val_data is None:
             print("Train %d samples" % len(X))
         else:
@@ -131,11 +131,8 @@ class ConvLSTMClassifier:
 
         self.sess.run(tf.global_variables_initializer()) # initialize all variables
         for epoch in range(n_epoch):
-            if en_shuffle:
-                X, Y = sklearn.utils.shuffle(X, Y)
-                print("Data Shuffled")
-            for local_step, ((X_batch, X_batch_lens), Y_batch) in enumerate(zip(self.next_batch(X, batch_size),
-                                                                                self.gen_batch(Y, batch_size))):
+            for local_step, ((X_batch, X_batch_lens), Y_batch) in enumerate(
+                zip(self.next_batch(X, batch_size), self.gen_batch(Y, batch_size))):
                 lr = self.decrease_lr(en_exp_decay, global_step, n_epoch, len(X), batch_size) 
                 _, loss, acc = self.sess.run([self.train_op, self.loss, self.acc],
                                              {self.X: X_batch, self.Y: Y_batch,

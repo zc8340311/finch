@@ -6,33 +6,12 @@ import sklearn
 
 class Conv1DClassifier:
     def __init__(self, seq_len, vocab_size, n_out, sess=tf.Session(),
-                 embedding_dims=50, n_filters=250, kernel_size=3, padding='valid'):
-        """
-        Parameters:
-        -----------
-        seq_len: int
-            Sequence length
-        vocab_size: int
-            Vocabulary size
-        embedding_dims: int
-            Word embedding dimensions
-        n_filters: int
-            Number output of filters in the convolution
-        kernel_size: int
-            Size of the 1D convolution window
-        hidden_dims: int
-            Ouput dimensions of the fully-connected layer
-        n_out: int
-            Output dimensions
-        sess: object
-            tf.Session() object 
-        """
+                 embedding_dims=50, n_filters=250, kernel_size=3):
         self.seq_len = seq_len
         self.vocab_size = vocab_size
         self.embedding_dims = embedding_dims
         self.n_filters = n_filters
         self.kernel_size = kernel_size
-        self.padding = padding
         self.n_out = n_out
         self.sess = sess
         self._pointer = None
@@ -67,23 +46,21 @@ class Conv1DClassifier:
     # end method add_word_embedding_layer
 
 
-    def add_conv1d(self, n_filters, strides=1):
-        Y = tf.layers.conv1d(inputs = self._pointer,
-                             filters = n_filters,
-                             kernel_size  = self.kernel_size,
-                             strides = strides,
-                             padding = self.padding,
-                             use_bias = True,
-                             activation = tf.nn.relu)
+    def add_conv1d(self, n_filters):
+        Y = tf.layers.conv1d(
+            inputs = self._pointer,
+            filters = n_filters,
+            kernel_size  = self.kernel_size,
+            activation = tf.nn.relu)
         self._pointer = Y
     # end method add_conv1d_layer
 
 
     def add_global_pooling(self):
-        Y = tf.layers.average_pooling1d(inputs = self._pointer,
-                                        pool_size = self._pointer.get_shape().as_list()[1],
-                                        strides = 1,
-                                        padding = self.padding)
+        Y = tf.layers.max_pooling1d(
+            inputs = self._pointer,
+            pool_size = self._pointer.get_shape().as_list()[1],
+            strides = 1)
         Y = tf.reshape(Y, [-1, self.n_filters])
         self._pointer = Y
     # end method add_global_maxpool_layer

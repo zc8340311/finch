@@ -6,7 +6,7 @@ import math
 
 
 class RNNTextClassifier:
-    def __init__(self, max_seq_len, vocab_size, n_out, embedding_dims=128, cell_size=128, grad_clip=5.0,
+    def __init__(self, vocab_size, n_out, embedding_dims=128, cell_size=128, grad_clip=5.0,
                  sess=tf.Session()):
         """
         Parameters:
@@ -20,7 +20,6 @@ class RNNTextClassifier:
         sess: object
             tf.Session() object
         """
-        self.max_seq_len = max_seq_len
         self.vocab_size = vocab_size
         self.embedding_dims = embedding_dims
         self.cell_size = cell_size
@@ -42,7 +41,7 @@ class RNNTextClassifier:
 
 
     def add_input_layer(self):
-        self.X = tf.placeholder(tf.int32, [None, self.max_seq_len])
+        self.X = tf.placeholder(tf.int32, [None, None])
         self.Y = tf.placeholder(tf.int64, [None])
         self.X_seq_lens = tf.placeholder(tf.int32, [None])
         self.keep_prob = tf.placeholder(tf.float32)
@@ -65,7 +64,8 @@ class RNNTextClassifier:
 
 
     def add_dynamic_rnn(self):       
-        _, self._pointer = tf.nn.dynamic_rnn(self.lstm_cell(), self._pointer, sequence_length=self.X_seq_lens,
+        _, self._pointer = tf.nn.dynamic_rnn(self.lstm_cell(), self._pointer,
+                                             sequence_length=self.X_seq_lens,
                                              dtype=tf.float32)
     # end method add_dynamic_rnn
 
@@ -159,17 +159,14 @@ class RNNTextClassifier:
 
 
     def pad_sentence_batch(self, sentence_batch, pad_int=0):
+        max_seq_len = max([len(sentence) for sentence in sentence_batch])
         padded_seqs = []
         seq_lens = []
         for sentence in sentence_batch:
-            if len(sentence) < self.max_seq_len:
-                padded_seqs.append(sentence + [pad_int] * (self.max_seq_len - len(sentence)))
-                seq_lens.append(len(sentence))
-            else:
-                padded_seqs.append(sentence[:self.max_seq_len])
-                seq_lens.append(self.max_seq_len)
+            padded_seqs.append(sentence + [pad_int] * (max_seq_len - len(sentence)))
+            seq_lens.append(len(sentence))
         return padded_seqs, seq_lens
-    # end method pad_sentence_batc
+    # end method pad_sentence_batch
 
 
     def next_batch(self, arr, batch_size):

@@ -1,12 +1,55 @@
-This project is based on [Kyubyong's](https://github.com/Kyubyong/transformer) excellent work, thanks for his first attempt!
+---
+Implementing the idea of ["Attention is All you Need"](https://arxiv.org/abs/1706.03762)
 
-Based on that, we have:
-* implemented the model under the architecture of ```tf.estimator.Estimator``` API
-* added an option to share the weights between encoder embedding and decoder embedding
-* added an option to share the weights between decoder embedding and output projection
+---
 
-Example running:
->  python train.py --hidden_units=128 --num_blocks=3 --tied_proj_weight --tied_embedding --label_smoothing
+<img src="https://github.com/zhedongzheng/finch/blob/master/assets/transformer.png" width="300">
 
-I found an image on internet (a kind of) illustrating how an army of attentions work ([Reference](https://techcrunch.com/2017/08/31/googles-transformer-solves-a-tricky-problem-in-machine-translation/)):
-![alt text](https://github.com/zhedongzheng/finch/blob/master/assets/transform20fps.gif)
+Some functions are adapted from [Kyubyong's](https://github.com/Kyubyong/transformer) work, thanks for him!
+
+* Based on that, we have:
+    * implemented the model under the architecture of ```tf.estimator.Estimator``` API
+
+    * added an option to share the weights between encoder embedding and decoder embedding
+
+    * added an option to share the weights between decoder embedding and output projection
+
+    * added the learning rate variation according to the formula in paper, and also expotential decay
+
+    * added more activation choices (leaky relu / elu) for easier gradient propagation
+
+    * enhanced masking (mask positional encoding as well)
+
+    * implemented decoding on graph and added start tokens
+
+* Small Task 1: learn sorting characters
+
+    ```  python train_letters.py --tied_embedding --label_smoothing ```
+        
+    ```
+    INFO:tensorflow:lr = 0.000914113 (22.901 sec)
+    INFO:tensorflow:Saving checkpoints for 4000 into ./saved/model.ckpt.
+    INFO:tensorflow:Loss for final step: 0.707183.
+    INFO:tensorflow:Restoring parameters from ./saved/model.ckpt-4000
+    apple -> aelpp
+    common -> cmmnoo
+    zhedong -> deghnoz
+    ```
+
+* Small Task 2: learn chinese dialog
+
+    ``` python train_dialog.py```
+    
+    ```
+    INFO:tensorflow:loss = 3.48946, step = 7001 (19.987 sec)
+    INFO:tensorflow:lr = 0.000851138 (19.987 sec)
+    INFO:tensorflow:Saving checkpoints for 7092 into ./saved/model.ckpt.
+    INFO:tensorflow:Loss for final step: 3.32809.
+    INFO:tensorflow:Restoring parameters from ./saved/model.ckpt-7092
+    你是谁 -> 我是小通
+    你喜欢我吗 -> 我喜欢你
+    给我唱一首歌 -> = =========
+    我帅吗 -> = =========
+    ```
+
+<img src="https://github.com/zhedongzheng/finch/blob/master/assets/transform20fps.gif" height='400'>

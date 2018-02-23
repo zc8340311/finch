@@ -54,9 +54,9 @@ def main():
         decoder_embedding_dim = 15,
     )
     model.fit(X_train, Y_train, val_data=(X_test, Y_test), batch_size=BATCH_SIZE)
-    model.infer('common', X_idx2char, Y_idx2char)
-    model.infer('apple', X_idx2char, Y_idx2char)
-    model.infer('zhedong', X_idx2char, Y_idx2char)
+    model.infer('common')
+    model.infer('apple')
+    model.infer('zhedong')
 # end function main
 
 

@@ -53,7 +53,8 @@ class Seq2Seq:
     
 
     def processed_decoder_input(self):
-        main = tf.strided_slice(self.Y, [0, 0], [self.batch_size, -1], [1, 1]) # remove last char
+        #main = tf.strided_slice(self.Y, [0, 0], [self.batch_size, -1], [1, 1]) # remove last char
+        main = self.Y[:, :-1] # remove last char
         decoder_input = tf.concat([tf.fill([self.batch_size, 1], self._y_go), main], 1)
         return decoder_input
     # end method add_decoder_layer

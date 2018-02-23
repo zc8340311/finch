@@ -1,8 +1,8 @@
 def load_data():
-    word2idx = {}
-    tag2idx = {}
-    word_idx = 0
-    tag_idx = 0
+    word2idx = {'<pad>': 0}
+    tag2idx = {'<pad>': 0}
+    word_idx = 1
+    tag_idx = 1
     x_train = []
     y_train = []
     x_test = []
@@ -21,7 +21,7 @@ def load_data():
                 tag_idx += 1
             y_train.append(tag2idx[tag])
 
-    word2idx['_unknown'] = word_idx
+    word2idx['<unknown>'] = word_idx
 
     for line in open('temp/pos_test.txt'):
         line = line.rstrip()
